@@ -28,7 +28,7 @@ jobs:
         run: npm version 1.0.${{ github.run_number }} --no-git-tag-version
 
       - name: Build
-        run: npm run build && npx electron-builder --win --x64
+        run: npm run build && npx electron-builder --win --x64 --publish never
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
