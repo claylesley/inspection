@@ -37,7 +37,7 @@
   "build": {
     "appId": "com.thegroves.inspection",
     "productName": "The Groves Inspection",
-    "copyright": "Copyright © 2025 The Groves",
+    "copyright": "Copyright © 2026 The Groves",
     "directories": {
       "output": "dist-electron"
     },
