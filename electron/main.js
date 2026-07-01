@@ -92,7 +92,6 @@ function createWindow() {
   });
 
   win.on("restore", () => win.webContents.send("session-refresh"));
-  win.on("focus",   () => win.webContents.send("session-refresh"));
 
   // Intercept close: confirm with user, then sign out
   win.on("close", (e) => {

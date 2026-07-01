@@ -877,7 +877,7 @@ function DirtyRater({value=0,onChange,dirtyRate=0,mults=DEFAULT_MULTS}) {
   );
 }
 
-function ItemRow({item,state={},onChange,mults=DEFAULT_MULTS}) {
+function ItemRow({item,state={},onChange,mults=DEFAULT_MULTS,showError=false}) {
   const fileRef    = useRef(null);
   const [preview,    setPreview]    = useState(null);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -907,11 +907,12 @@ function ItemRow({item,state={},onChange,mults=DEFAULT_MULTS}) {
   const removePhoto = i => onChange({...state, photos:photos.filter((_,j)=>j!==i)});
 
   return (
-    <div style={{padding:"11px 0",borderBottom:"1px solid #F1F5F9"}}>
+    <div style={{padding:"11px 0",borderBottom:"1px solid #F1F5F9",...(showError?{background:"rgba(239,68,68,.04)"}:{})}}>
       <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:14,fontWeight:600,color:"#1E293B",marginBottom:6}}>
             {item.label}{item.note&&<span style={{fontSize:11,color:"#94A3B8",marginLeft:7,fontWeight:400}}>{item.note}</span>}
+            {showError&&<span style={{fontSize:10,fontWeight:700,color:"#EF4444",background:"#FEE2E2",borderRadius:4,padding:"1px 6px",marginLeft:8}}>Required</span>}
           </div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
             <Pill val="clean"  active={status==="clean"}  label="✓ Clean"   onClick={()=>onChange({...state,status:"clean"})}/>
@@ -1447,6 +1448,8 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
   const [signatures,  setSignatures]  = useState({inspector:null,tenant:null});
   const [tab,         setTab]         = useState("info");
   const [started,     setStarted]     = useState(false);
+  const [sharedShowErrors, setSharedShowErrors] = useState(false);
+  const [bedsShowErrors,   setBedsShowErrors]   = useState(false);
   useEffect(()=>{ window.scrollTo({top:0,behavior:"smooth"}); },[tab]);
 
   // Auto-save draft 2.5 s after any input change (only once inspection has started)
@@ -1906,7 +1909,7 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
                 const items=sharedItems.filter(i=>i.group===grp);
                 if(!items.length)return null;
                 return (<div key={grp}><div style={{fontSize:10,fontWeight:700,color:"#94A3B8",textTransform:"uppercase",letterSpacing:"1px",marginTop:14,marginBottom:2}}>{grp}</div>
-                  {items.map(item=><ItemRow key={item.id} item={item} state={shared[item.id]} onChange={v=>setSharedItem(item.id,v)} mults={mults}/>)}
+                  {items.map(item=><ItemRow key={item.id} item={item} state={shared[item.id]} onChange={v=>setSharedItem(item.id,v)} mults={mults} showError={sharedShowErrors&&!shared[item.id]?.status}/>)}
                 </div>);
               })}
               <ExtraChargeField
@@ -1922,9 +1925,18 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
                 label="Shared Space Photos"
               />
             </Card>
+            {sharedShowErrors&&sharedItems.some(i=>!shared[i.id]?.status)&&(
+              <div style={{background:"#FEE2E2",color:"#991B1B",padding:"10px 14px",borderRadius:8,fontSize:13,marginBottom:8}}>
+                Please select Clean, Dirty, or Replace for every item before continuing.
+              </div>
+            )}
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setTab("info")}   style={BACK_BTN}>← Back</button>
-              <button onClick={()=>setTab("beds")}   style={NEXT_BTN}>Bedroom Inspection →</button>
+              <button onClick={()=>{
+                const hasUnfilled=sharedItems.some(i=>!shared[i.id]?.status);
+                if(hasUnfilled){setSharedShowErrors(true);return;}
+                setSharedShowErrors(false);setTab("beds");
+              }} style={NEXT_BTN}>Bedroom Inspection →</button>
             </div>
           </div>
         )}
@@ -1934,10 +1946,10 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
           <div>
             {beds.slice(0,numBeds).map((bed,bi)=>(
               <Card key={bi} color="#1E3A5F" title={bedLabels[bi]} subtitle="Individual room charges" total={bedTotals[bi]} mb={14}>
-                {bedItems.filter(i=>!i.bath).map(item=><ItemRow key={item.id} item={item} state={bed.items?.[item.id]} onChange={v=>setBedItem(bi,item.id,v)} mults={mults}/>)}
+                {bedItems.filter(i=>!i.bath).map(item=><ItemRow key={item.id} item={item} state={bed.items?.[item.id]} onChange={v=>setBedItem(bi,item.id,v)} mults={mults} showError={bedsShowErrors&&!bed.items?.[item.id]?.status}/>)}
                 <div style={{margin:"12px 0 4px",padding:"0 12px 8px",background:"#F8FAFC",borderRadius:10,border:"1px solid #F1F5F9"}}>
                   <div style={{fontSize:10,fontWeight:700,color:"#94A3B8",textTransform:"uppercase",letterSpacing:"1px",padding:"10px 0 2px"}}>Bathroom</div>
-                  {bedItems.filter(i=>i.bath).map(item=><ItemRow key={item.id} item={item} state={bed.items?.[item.id]} onChange={v=>setBedItem(bi,item.id,v)} mults={mults}/>)}
+                  {bedItems.filter(i=>i.bath).map(item=><ItemRow key={item.id} item={item} state={bed.items?.[item.id]} onChange={v=>setBedItem(bi,item.id,v)} mults={mults} showError={bedsShowErrors&&!bed.items?.[item.id]?.status}/>)}
                 </div>
                 <ExtraChargeField
                   note={bed.extraNote||""} amount={bed.extraAmount||""}
@@ -1965,9 +1977,18 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
                 </div>
               </Card>
             ))}
+            {bedsShowErrors&&beds.slice(0,numBeds).some(bed=>bedItems.some(i=>!bed.items?.[i.id]?.status))&&(
+              <div style={{background:"#FEE2E2",color:"#991B1B",padding:"10px 14px",borderRadius:8,fontSize:13,marginBottom:8}}>
+                Please select Clean, Dirty, or Replace for every item in all bedrooms before continuing.
+              </div>
+            )}
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setTab("shared")} style={BACK_BTN}>← Back</button>
-              <button onClick={()=>setTab("summary")} style={NEXT_BTN}>View Summary →</button>
+              <button onClick={()=>{
+                const hasUnfilled=beds.slice(0,numBeds).some(bed=>bedItems.some(i=>!bed.items?.[i.id]?.status));
+                if(hasUnfilled){setBedsShowErrors(true);return;}
+                setBedsShowErrors(false);setTab("summary");
+              }} style={NEXT_BTN}>View Summary →</button>
             </div>
           </div>
         )}
@@ -2174,6 +2195,7 @@ export default function App() {
   const [selected,    setSelected]    = useState(null);
   const [itLoginOpen, setItLoginOpen] = useState(false);
   const [zoom,        setZoom]        = useState(() => parseFloat(localStorage.getItem("appZoom") || "1"));
+  const isLoggedInRef = useRef(false);
 
   useEffect(() => {
     applyZoom(zoom);
@@ -2201,14 +2223,17 @@ export default function App() {
     supabase.auth.getSession().then(({data:{session}})=>{ session?loadProfile(session.user):setView("login"); });
     const {data:{subscription}} = supabase.auth.onAuthStateChange((event,session)=>{
       if (event === "SIGNED_IN" && session) {
-        // Fresh sign-in only — record the event and load the profile/view
-        recordLoginEvent("login", session.user);
-        loadProfile(session.user);
+        // Only handle fresh sign-in — ignore SIGNED_IN events that fire during token
+        // refresh (which can happen when refreshSession() re-establishes the session).
+        if (!isLoggedInRef.current) {
+          recordLoginEvent("login", session.user);
+          loadProfile(session.user);
+        }
       } else if (!session) {
         // Potentially signed out — wait briefly for transient token refresh failures
         setTimeout(async () => {
           const { data } = await supabase.auth.getSession();
-          if (!data?.session) { setProfile(null); setPricing(null); setView("login"); }
+          if (!data?.session) { isLoggedInRef.current = false; setProfile(null); setPricing(null); setView("login"); }
         }, 2000);
       }
       // TOKEN_REFRESHED, INITIAL_SESSION, etc. with a valid session → do nothing;
@@ -2222,8 +2247,15 @@ export default function App() {
   useEffect(()=>{
     if (!window.electronAPI?.onSessionRefresh) return;
     window.electronAPI.onSessionRefresh(async () => {
-      const { data } = await supabase.auth.refreshSession();
-      if (!data?.session) { setProfile(null); setPricing(null); setView("login"); }
+      try {
+        // Skip refresh if the local session is still valid (avoids noisy network calls
+        // and prevents the SIGNED_IN event from re-firing on a healthy session).
+        const { data: current } = await supabase.auth.getSession();
+        const sess = current?.session;
+        if (sess && sess.expires_at > Date.now() / 1000 + 60) return;
+        const { data, error } = await supabase.auth.refreshSession();
+        if (!error && !data?.session) { isLoggedInRef.current = false; setProfile(null); setPricing(null); setView("login"); }
+      } catch (_) { /* network error — don't redirect */ }
     });
   },[]);
 
@@ -2272,6 +2304,7 @@ export default function App() {
       setPricing(pc);
     }
 
+    isLoggedInRef.current = true;
     setView(prof.role==="admin"?"dashboard":"inspections");
   };
 
@@ -2286,6 +2319,7 @@ export default function App() {
         });
       }
     } catch (e) { console.warn("logout tracking:", e.message); }
+    isLoggedInRef.current = false;
     await supabase.auth.signOut();
   };
 
