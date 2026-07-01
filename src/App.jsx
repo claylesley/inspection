@@ -1448,13 +1448,17 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
   const [signatures,  setSignatures]  = useState({inspector:null,tenant:null});
   const [tab,         setTab]         = useState("info");
   const [started,     setStarted]     = useState(false);
+  const [originalStatus, setOriginalStatus] = useState(null);
+  const skipAutoSave   = useRef(false);
   const [sharedShowErrors, setSharedShowErrors] = useState(false);
   const [bedsShowErrors,   setBedsShowErrors]   = useState(false);
   useEffect(()=>{ window.scrollTo({top:0,behavior:"smooth"}); },[tab]);
 
-  // Auto-save draft 2.5 s after any input change (only once inspection has started)
+  // Auto-save draft 2.5 s after any input change (only once inspection has started).
+  // Skip the first fire after loading an existing inspection — nothing has changed yet.
   useEffect(()=>{
     if (!started) return;
+    if (skipAutoSave.current) { skipAutoSave.current = false; return; }
     clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(()=>{
       saveInspection("draft").then(d=>{ if(d){ setDraftMsg("Auto-saved"); setTimeout(()=>setDraftMsg(""),3000); } });
@@ -1620,6 +1624,8 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
       setExtraShared(es);
       setStdChecks({...Object.fromEntries(allSupplies.map(s=>[s,false])), ...(data.std_checks||{})});
       setSupNotes(data.sup_notes||"");
+      setOriginalStatus(data.status||"draft");
+      skipAutoSave.current = true;
       setStarted(true);
       setLoaded(true);
     });
@@ -1790,8 +1796,9 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
         <div style={{maxWidth:660,margin:"0 auto",padding:"10px 16px 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
             <button onClick={onBack} style={{background:"transparent",border:"none",color:"rgba(255,255,255,.6)",fontSize:13,cursor:"pointer",padding:0,marginBottom:2}}>← Back</button>
-            <div style={{fontSize:15,fontWeight:800,color:"#FFF"}}>
+            <div style={{fontSize:15,fontWeight:800,color:"#FFF",display:"flex",alignItems:"center",gap:8}}>
               {existingId?"Edit Inspection":"New Inspection"}
+              {originalStatus==="submitted"&&<span style={{fontSize:11,fontWeight:700,background:"#166534",color:"#86EFAC",borderRadius:6,padding:"2px 8px",letterSpacing:".3px"}}>✓ Submitted</span>}
             </div>
             <div style={{fontSize:11,color:"rgba(255,255,255,.5)"}}>
               {info.house?`House ${info.house}`:""}{info.tenant?` · ${info.tenant}`:""}
