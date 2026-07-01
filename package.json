@@ -1,0 +1,77 @@
+{
+  "name": "groves-inspection",
+  "version": "1.0.0",
+  "description": "The Groves Move-Out Inspection App",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
+    "electron:build": "npm run build && electron-builder",
+    "electron:win": "npm run build && electron-builder --win --x64",
+    "android:sync": "npm run build && npx cap sync android",
+    "android:open": "npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/cli": "^8.4.1",
+    "@capacitor/core": "^8.4.1",
+    "@capacitor/filesystem": "^8.1.2",
+    "@capacitor/share": "^8.0.1",
+    "@supabase/supabase-js": "^2.108.2",
+    "electron-updater": "^6.8.9",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.0.0",
+    "concurrently": "^8.0.0",
+    "electron": "^30.5.1",
+    "electron-builder": "^24.0.0",
+    "vite": "^5.0.0",
+    "wait-on": "^7.0.0"
+  },
+  "build": {
+    "appId": "com.thegroves.inspection",
+    "productName": "The Groves Inspection",
+    "copyright": "Copyright © 2025 The Groves",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Groves Inspection",
+      "artifactName": "TheGrovesInspection-${version}.${ext}"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "claylesley",
+      "repo": "inspection"
+    }
+  },
+  "allowScripts": {
+    "electron@30.5.1": true,
+    "esbuild@0.21.5": true,
+    "core-js@3.49.0": true
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "name": "groves-inspection",
+  "version": "1.0.0",
+  "description": "The Groves Move-Out Inspection App",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev":             "vite",
+    "build":           "vite build",
+    "preview":         "vite preview",
+
+    "electron:dev":    "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
+    "electron:build":  "npm run build && electron-builder",
+    "electron:win":    "npm run build && electron-builder --win --x64"
+  },
+  "dependencies": {
+    "react":     "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.0.0",
+    "vite":                 "^5.0.0",
+    "electron":             "^30.0.0",
+    "electron-builder":     "^24.0.0",
+    "concurrently":         "^8.0.0",
+    "wait-on":              "^7.0.0"
+  },
+  "build": {
+    "appId":       "com.thegroves.inspection",
+    "productName": "The Groves Inspection",
+    "copyright":   "Copyright © 2025 The Groves",
+
+    "directories": {
+      "output": "dist-electron"
+    },
+
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ]
+    },
+
+    "nsis": {
+      "oneClick":                       false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut":          true,
+      "createStartMenuShortcut":        true,
+      "shortcutName":                   "Groves Inspection",
+      "installerIcon":                  "electron/icon.ico",
+      "uninstallerIcon":                "electron/icon.ico"
+    },
+
+    "publish": null
+  }
+}

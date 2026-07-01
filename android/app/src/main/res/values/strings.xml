@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">The Groves Inspection</string>
+    <string name="title_activity_main">The Groves Inspection</string>
+    <string name="package_name">com.thegroves.inspection</string>
+    <string name="custom_url_scheme">com.thegroves.inspection</string>
+</resources>
