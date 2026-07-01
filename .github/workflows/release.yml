@@ -27,7 +27,17 @@ jobs:
       - name: Set version (1.0.<run_number>)
         run: npm version 1.0.${{ github.run_number }} --no-git-tag-version
 
-      - name: Build & publish to GitHub Releases
-        run: npm run build && npx electron-builder --win --x64 --publish always
+      - name: Build
+        run: npm run build && npx electron-builder --win --x64
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: v1.0.${{ github.run_number }}
+          files: |
+            dist-electron/*.exe
+            dist-electron/*.blockmap
+            dist-electron/latest.yml
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
