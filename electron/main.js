@@ -17,6 +17,7 @@ function getMacAddress() {
 
 ipcMain.handle("get-mac-address", () => getMacAddress());
 ipcMain.handle("get-device-name",  () => os.hostname());
+ipcMain.handle("set-zoom", (_, factor) => { if (win) win.webContents.setZoomFactor(factor); });
 
 const isDev = !app.isPackaged;
 

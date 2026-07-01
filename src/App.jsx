@@ -4,7 +4,7 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { isElectron, isAndroid, savePDF, onAppClosing, signOutComplete, torchSet, getMacAddress, getDeviceName } from "./platform.js";
+import { isElectron, isAndroid, savePDF, onAppClosing, signOutComplete, torchSet, getMacAddress, getDeviceName, applyZoom } from "./platform.js";
 import ITTerminal from "./ITTerminal.jsx";
 
 // ═══════════════════════════════════════════════════════════
@@ -2125,6 +2125,28 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// ZOOM WIDGET
+// ═══════════════════════════════════════════════════════════
+
+function ZoomWidget({ zoom, onChange }) {
+  return (
+    <div style={{
+      position:"fixed",bottom:14,right:14,zIndex:9000,
+      display:"flex",alignItems:"center",gap:7,
+      background:"rgba(15,39,68,0.70)",backdropFilter:"blur(4px)",
+      borderRadius:20,padding:"5px 12px",
+      boxShadow:"0 1px 6px rgba(0,0,0,.3)",
+    }}>
+      <span style={{fontSize:10,color:"rgba(255,255,255,.5)",userSelect:"none",lineHeight:1}}>A</span>
+      <input type="range" min={0.8} max={1.4} step={0.05} value={zoom}
+        onChange={e=>onChange(parseFloat(e.target.value))}
+        style={{width:70,accentColor:"#93C5FD",cursor:"pointer",margin:0}}/>
+      <span style={{fontSize:15,color:"rgba(255,255,255,.5)",userSelect:"none",lineHeight:1}}>A</span>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
 // MAIN APP  — auth + routing
 // ═══════════════════════════════════════════════════════════
 
@@ -2151,6 +2173,12 @@ export default function App() {
   const [view,        setView]        = useState("loading");
   const [selected,    setSelected]    = useState(null);
   const [itLoginOpen, setItLoginOpen] = useState(false);
+  const [zoom,        setZoom]        = useState(() => parseFloat(localStorage.getItem("appZoom") || "1"));
+
+  useEffect(() => {
+    applyZoom(zoom);
+    localStorage.setItem("appZoom", zoom);
+  }, [zoom]);
 
   const recordLoginEvent = async (eventType, user) => {
     try {
@@ -2172,32 +2200,30 @@ export default function App() {
   useEffect(()=>{
     supabase.auth.getSession().then(({data:{session}})=>{ session?loadProfile(session.user):setView("login"); });
     const {data:{subscription}} = supabase.auth.onAuthStateChange((event,session)=>{
-      if (event === "SIGNED_IN" && session) recordLoginEvent("login", session.user);
-      if (session) {
+      if (event === "SIGNED_IN" && session) {
+        // Fresh sign-in only — record the event and load the profile/view
+        recordLoginEvent("login", session.user);
         loadProfile(session.user);
-      } else {
-        // Don't immediately log out — could be a transient token refresh failure
-        // after sleep/minimize. Give Supabase 2 s to recover before showing login.
+      } else if (!session) {
+        // Potentially signed out — wait briefly for transient token refresh failures
         setTimeout(async () => {
           const { data } = await supabase.auth.getSession();
-          if (data?.session) {
-            loadProfile(data.session.user);
-          } else {
-            setProfile(null); setPricing(null); setView("login");
-          }
+          if (!data?.session) { setProfile(null); setPricing(null); setView("login"); }
         }, 2000);
       }
+      // TOKEN_REFRESHED, INITIAL_SESSION, etc. with a valid session → do nothing;
+      // the user is already logged in and their current view should not change.
     });
     return ()=>subscription.unsubscribe();
   },[]);
 
-  // Silently refresh the session when the system wakes from sleep or the
-  // window is restored from minimize, so the user never sees the login screen.
+  // Silently refresh the token when the system wakes or the window is restored.
+  // Only redirect to login if the session is actually gone — never reset the view.
   useEffect(()=>{
     if (!window.electronAPI?.onSessionRefresh) return;
     window.electronAPI.onSessionRefresh(async () => {
       const { data } = await supabase.auth.refreshSession();
-      if (data?.session) loadProfile(data.session.user);
+      if (!data?.session) { setProfile(null); setPricing(null); setView("login"); }
     });
   },[]);
 
@@ -2273,8 +2299,10 @@ export default function App() {
   );
   if (!profile) return null;
 
+  const zoomWidget = <ZoomWidget zoom={zoom} onChange={setZoom}/>;
+
   // IT Admin
-  if (view==="it-terminal" && profile.role==="it_admin") return <ITTerminal profile={profile} supabase={supabase} onLogout={logout}/>;
+  if (view==="it-terminal" && profile.role==="it_admin") return <>{<ITTerminal profile={profile} supabase={supabase} onLogout={logout}/>}{zoomWidget}</>;
 
   // Inspector
   if (profile.role==="inspector") {
@@ -2284,6 +2312,7 @@ export default function App() {
         {view==="inspections" && <InspectionList profile={profile} showAll={false} onNew={()=>setView("new")} onSelect={i=>{setSelected(i);setView("detail");}}/>}
         {view==="new"         && <InspectionFormView profile={profile} pricing={pricing} onSaved={()=>setView("inspections")} onBack={()=>setView("inspections")}/>}
         {view==="detail"      && <InspectionFormView profile={profile} pricing={pricing} existingId={selected?.id} onSaved={()=>setView("inspections")} onBack={()=>setView("inspections")}/>}
+        {zoomWidget}
       </NavShell>
     );
   }
@@ -2298,6 +2327,7 @@ export default function App() {
       {view==="detail"    && <InspectionFormView profile={profile} pricing={pricing} existingId={selected?.id} onSaved={()=>setView("history")} onBack={()=>setView("history")}/>}
       {view==="settings"  && <AdminSettings profile={profile} pricing={pricing} onPricingUpdated={setPricing}/>}
       {view==="users"     && <UserManagement profile={profile}/>}
+      {zoomWidget}
     </NavShell>
   );
 }

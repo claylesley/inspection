@@ -9,4 +9,5 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onSessionRefresh: (callback) => ipcRenderer.on("session-refresh", () => callback()),
   getMacAddress:    () => ipcRenderer.invoke("get-mac-address"),
   getDeviceName:    () => ipcRenderer.invoke("get-device-name"),
+  setZoom:          (factor) => ipcRenderer.invoke("set-zoom", factor),
 });

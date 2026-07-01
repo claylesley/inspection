@@ -98,6 +98,17 @@ export async function getDeviceName() {
   return null;
 }
 
+// ── App zoom ────────────────────────────────────────────────────────────────
+
+export function applyZoom(factor) {
+  if (isElectron && window.electronAPI?.setZoom) {
+    window.electronAPI.setZoom(factor);
+  } else {
+    // Fallback for web/Capacitor: CSS zoom on the root element
+    document.documentElement.style.zoom = factor;
+  }
+}
+
 // ── Torch (Electron only for now) ───────────────────────────────────────────
 
 export async function torchSet(enabled) {
