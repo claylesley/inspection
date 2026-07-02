@@ -630,6 +630,8 @@ function ItemTable({ items, onSave, groups }) {
   const startEdit=item=>{setEditing(item.id);setDraft({...item});}; const cancelEdit=()=>{setEditing(null);setDraft({});};
   const saveEdit=()=>{ const u=local.map(i=>i.id===editing?{...draft,dirty:draft.dirty===""?null:Number(draft.dirty),replace:draft.replace===""?null:Number(draft.replace)}:i); setLocal(u);setEditing(null);setDraft({});onSave(u); };
   const del=id=>{const u=local.filter(i=>i.id!==id);setLocal(u);onSave(u);};
+  const moveUp=id=>{const idx=local.findIndex(i=>i.id===id);if(idx<=0)return;const u=[...local];[u[idx-1],u[idx]]=[u[idx],u[idx-1]];setLocal(u);onSave(u);};
+  const moveDown=id=>{const idx=local.findIndex(i=>i.id===id);if(idx>=local.length-1)return;const u=[...local];[u[idx+1],u[idx]]=[u[idx],u[idx+1]];setLocal(u);onSave(u);};
   const add=()=>{ if(!newItem.label.trim())return; const item={...newItem,id:newId(),dirty:newItem.dirty===""?null:Number(newItem.dirty),replace:newItem.replace===""?null:Number(newItem.replace)}; const u=[...local,item];setLocal(u);onSave(u);setAdding(false);setNewItem({label:"",group:groups?.[0]||"",dirty:"",replace:"",fixed:false,perUnit:false,bath:false}); };
   const SB=(bg,label,onClick)=><button onClick={onClick} style={{padding:"3px 10px",background:bg,color:"#FFF",border:"none",borderRadius:6,fontSize:11,fontWeight:700,cursor:"pointer",marginLeft:4}}>{label}</button>;
   return (
@@ -653,7 +655,7 @@ function ItemTable({ items, onSave, groups }) {
               <TD a="right">{item.dirty!=null?`$${item.dirty}`:"—"}</TD>
               <TD a="right">{item.replace!=null?`$${item.replace}`:"—"}</TD>
               <TD><span style={{fontSize:10,color:"#64748B"}}>{[item.perUnit&&"per-unit",item.fixed&&"fixed",item.bath&&"bath"].filter(Boolean).join(", ")||"—"}</span></TD>
-              <TD a="center">{SB("#1E40AF","Edit",()=>startEdit(item))}{SB("#DC2626","Del",()=>del(item.id))}</TD>
+              <TD a="center"><button onClick={()=>moveUp(item.id)} style={{padding:"2px 6px",background:"#F1F5F9",color:"#64748B",border:"1px solid #E2E8F0",borderRadius:4,fontSize:11,cursor:"pointer",marginRight:2}}>↑</button><button onClick={()=>moveDown(item.id)} style={{padding:"2px 6px",background:"#F1F5F9",color:"#64748B",border:"1px solid #E2E8F0",borderRadius:4,fontSize:11,cursor:"pointer",marginRight:4}}>↓</button>{SB("#1E40AF","Edit",()=>startEdit(item))}{SB("#DC2626","Del",()=>del(item.id))}</TD>
             </tr>
           ))}
           {adding?(
@@ -1070,7 +1072,7 @@ function PhotoCapture({ photos=[], onAdd, onRemove, label="Photos" }) {
   );
 }
 
-function SubmitModal({onClose,onSubmit,loading,result}) {
+function SubmitModal({onClose,onSubmit,loading}) {
   const [extraEmail, setExtraEmail] = useState("");
   const [emailErr,   setEmailErr]   = useState("");
 
@@ -1087,34 +1089,22 @@ function SubmitModal({onClose,onSubmit,loading,result}) {
     <div style={{position:"fixed",inset:0,zIndex:999,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div style={{background:"#FFF",borderRadius:16,width:"100%",maxWidth:400,padding:24,boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
         <div style={{fontSize:18,fontWeight:900,color:"#0F2744",marginBottom:4}}>Submit Report</div>
-        {result?(
-          <>
-            <div style={{background:"#DCFCE7",border:"1px solid #86EFAC",borderRadius:10,padding:"14px 16px",marginBottom:20}}>
-              <div style={{fontSize:14,fontWeight:700,color:"#166534"}}>✓ Report saved!</div>
-              <div style={{fontSize:12,color:"#166534",marginTop:4,lineHeight:1.5}}>The inspection is saved to the cloud. Emails sent to all configured addresses.</div>
-            </div>
-            <button onClick={onClose} style={{width:"100%",padding:"11px 0",background:"#166534",color:"#FFF",border:"none",borderRadius:10,fontSize:14,fontWeight:800,cursor:"pointer"}}>Done</button>
-          </>
-        ):(
-          <>
-            <div style={{fontSize:13,color:"#64748B",marginBottom:16,lineHeight:1.5}}>The inspection will be saved to the cloud and PDFs emailed to all addresses configured in <strong>Settings → Emails</strong>.</div>
-            <div style={{marginBottom:18}}>
-              <div style={{fontSize:11,fontWeight:700,color:"#64748B",marginBottom:5}}>SEND A ONE-TIME COPY TO (optional)</div>
-              <input
-                type="email"
-                value={extraEmail}
-                onChange={e=>{ setExtraEmail(e.target.value); setEmailErr(""); }}
-                placeholder="e.g. tenant@email.com"
-                style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",border:emailErr?"1.5px solid #EF4444":"1.5px solid #E2E8F0",borderRadius:8,fontSize:13,outline:"none",fontFamily:"inherit"}}
-              />
-              {emailErr&&<div style={{fontSize:11,color:"#EF4444",marginTop:4}}>{emailErr}</div>}
-            </div>
-            <div style={{display:"flex",gap:10}}>
-              <button onClick={onClose} style={{flex:1,padding:"11px 0",background:"#F1F5F9",color:"#64748B",border:"none",borderRadius:10,fontSize:14,fontWeight:700,cursor:"pointer"}}>Cancel</button>
-              <button onClick={handleSubmit} disabled={loading} style={{flex:2,padding:"11px 0",background:loading?"#94A3B8":"#0F2744",color:"#FFF",border:"none",borderRadius:10,fontSize:14,fontWeight:800,cursor:loading?"default":"pointer"}}>{loading?"⏳ Saving…":"📤 Submit"}</button>
-            </div>
-          </>
-        )}
+        <div style={{fontSize:13,color:"#64748B",marginBottom:16,lineHeight:1.5}}>PDFs will be generated and emails sent in the background — you can start a new inspection immediately after confirming.</div>
+        <div style={{marginBottom:18}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#64748B",marginBottom:5}}>SEND A ONE-TIME COPY TO (optional)</div>
+          <input
+            type="email"
+            value={extraEmail}
+            onChange={e=>{ setExtraEmail(e.target.value); setEmailErr(""); }}
+            placeholder="e.g. tenant@email.com"
+            style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",border:emailErr?"1.5px solid #EF4444":"1.5px solid #E2E8F0",borderRadius:8,fontSize:13,outline:"none",fontFamily:"inherit"}}
+          />
+          {emailErr&&<div style={{fontSize:11,color:"#EF4444",marginTop:4}}>{emailErr}</div>}
+        </div>
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={onClose} style={{flex:1,padding:"11px 0",background:"#F1F5F9",color:"#64748B",border:"none",borderRadius:10,fontSize:14,fontWeight:700,cursor:"pointer"}}>Cancel</button>
+          <button onClick={handleSubmit} disabled={loading} style={{flex:2,padding:"11px 0",background:loading?"#94A3B8":"#0F2744",color:"#FFF",border:"none",borderRadius:10,fontSize:14,fontWeight:800,cursor:loading?"default":"pointer"}}>{loading?"⏳ Saving…":"📤 Submit"}</button>
+        </div>
       </div>
     </div>
   );
@@ -1124,7 +1114,7 @@ function SubmitModal({onClose,onSubmit,loading,result}) {
 // INSPECTION LIST  (history)
 // ═══════════════════════════════════════════════════════════
 
-function InspectionList({ profile, onSelect, onNew, showAll=false }) {
+function InspectionList({ profile, onSelect, onNew, showAll=false, refreshKey=0 }) {
   const [inspections,setInspections]=useState([]);
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState("");
@@ -1145,7 +1135,7 @@ function InspectionList({ profile, onSelect, onNew, showAll=false }) {
       setInspections(data||[]);
       setLoading(false);
     })();
-  },[profile,showAll]);
+  },[profile,showAll,refreshKey]);
 
   const filtered = inspections.filter(i=>
     !search||[i.house_num,i.room_num,i.tenant_name].some(v=>v?.toLowerCase().includes(search.toLowerCase()))
@@ -1264,7 +1254,7 @@ function InspectionList({ profile, onSelect, onNew, showAll=false }) {
 // ADMIN DASHBOARD
 // ═══════════════════════════════════════════════════════════
 
-function AdminDashboard({ profile, onNav }) {
+function AdminDashboard({ profile, onNav, refreshKey=0 }) {
   const [stats,setStats]=useState({total:0,submitted:0,drafts:0,totalCharges:0,thisMonth:0});
   const [recent,setRecent]=useState([]);
 
@@ -1284,7 +1274,7 @@ function AdminDashboard({ profile, onNav }) {
       });
       setRecent(data.slice(0,6));
     })();
-  },[profile]);
+  },[profile,refreshKey]);
 
   const Stat=({label,value,sub})=>(
     <div style={{background:"#FFF",borderRadius:12,boxShadow:"0 1px 4px rgba(0,0,0,.09)",padding:"16px 20px",flex:1,minWidth:140}}>
@@ -1433,7 +1423,7 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
   const defBed   = ()=>({notes:"",extraNote:"",extraAmount:"",photos:[],items:Object.fromEntries(bedItems.map(i=>[i.id,defItem()]))});
 
   const [loaded,      setLoaded]      = useState(!existingId);
-  const [info,        setInfo]        = useState({house:"",room:"",date:today,tenant:"",inspector:"",numBeds:1});
+  const [info,        setInfo]        = useState({house:"",room:"",date:today,tenant:"",inspector:"",numBeds:0});
   const [infoPhotos,  setInfoPhotos]  = useState([]);
   const savedIdRef   = useRef(existingId||null);
   const autoSaveTimer = useRef(null);
@@ -1452,6 +1442,9 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
   const skipAutoSave   = useRef(false);
   const [sharedShowErrors, setSharedShowErrors] = useState(false);
   const [bedsShowErrors,   setBedsShowErrors]   = useState(false);
+  const [editedAt,         setEditedAt]         = useState(null);
+  const [resubmitCount,    setResubmitCount]    = useState(0);
+  const [lastResubmittedAt,setLastResubmittedAt]= useState(null);
   useEffect(()=>{ window.scrollTo({top:0,behavior:"smooth"}); },[tab]);
 
   // Auto-save draft 2.5 s after any input change (only once inspection has started).
@@ -1461,7 +1454,10 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
     if (skipAutoSave.current) { skipAutoSave.current = false; return; }
     clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(()=>{
-      saveInspection("draft").then(d=>{ if(d){ setDraftMsg("Auto-saved"); setTimeout(()=>setDraftMsg(""),3000); } });
+      const isFirstEdit = originalStatus === "submitted" && !editedAt;
+      const newEditedAt = isFirstEdit ? new Date().toISOString() : editedAt;
+      if (isFirstEdit) setEditedAt(newEditedAt);
+      saveInspection(originalStatus || "draft", isFirstEdit ? {editedAt: newEditedAt} : {}).then(d=>{ if(d){ setDraftMsg("Auto-saved"); setTimeout(()=>setDraftMsg(""),3000); } });
     }, 2500);
     return ()=>clearTimeout(autoSaveTimer.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1606,7 +1602,10 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
         numBeds:  data.num_beds||1,
       });
       const sd = data.shared_data||{};
-      const { _sharedPhotos, _signatures, _inspector, _infoPhotos, ...cleanShared } = sd;
+      const { _sharedPhotos, _signatures, _inspector, _infoPhotos, _editedAt, _resubmitCount, _lastResubmittedAt, ...cleanShared } = sd;
+      setEditedAt(_editedAt||null);
+      setResubmitCount(_resubmitCount||0);
+      setLastResubmittedAt(_lastResubmittedAt||null);
       setInfoPhotos(_infoPhotos||[]);
       // Merge saved item states with current sharedItems (handles added/removed items)
       setShared(Object.fromEntries(sharedItems.map(i=>[i.id, cleanShared[i.id]||defItem()])));
@@ -1665,7 +1664,7 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
   const removeBedPhoto  =(bi,i)=>setBedField(bi,"photos",(beds[bi].photos||[]).filter((_,j)=>j!==i));
 
   // ── Supabase save ──────────────────────────────────────
-  const saveInspection = async (status="draft") => {
+  const saveInspection = async (status="draft", overrides={}) => {
     setSaving(true);
     const sharedDataWithExtras = {
       ...shared,
@@ -1673,6 +1672,9 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
       _signatures:   signatures,
       _inspector:    info.inspector,
       _infoPhotos:   infoPhotos,
+      _editedAt:           "editedAt"           in overrides ? overrides.editedAt           : editedAt,
+      _resubmitCount:      "resubmitCount"      in overrides ? overrides.resubmitCount      : resubmitCount,
+      _lastResubmittedAt:  "lastResubmittedAt"  in overrides ? overrides.lastResubmittedAt  : lastResubmittedAt,
     };
     const payload = {
       org_id:         profile.org_id,
@@ -1705,64 +1707,56 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
   // ── Submit + print ─────────────────────────────────────
   const handleSubmit = async (extraEmail = null) => {
     setSubmitting(true);
-    const data = await saveInspection("submitted");
+    const isResubmit = originalStatus === "submitted";
+    const newResubmitCount    = isResubmit ? resubmitCount + 1 : resubmitCount;
+    const newResubmittedAt    = isResubmit ? new Date().toISOString() : lastResubmittedAt;
+    const data = await saveInspection("submitted", {
+      resubmitCount:     newResubmitCount,
+      lastResubmittedAt: newResubmittedAt,
+      editedAt:          null,
+    });
     if (!data) { setSubmitting(false); return; }
-
-    // Full PDF (with photos) → saved to computer
-    const pdfResult   = await generatePDFBase64(buildFilename('Inspection'));
-    const pdfFilename = pdfResult?.filename ?? null;
-
-    const supResult   = await generateSuppliesPDFBase64(buildFilename('Supplies'));
-    const supFilename = supResult?.filename ?? null;
-
-    // No-photo PDF → emailed
-    const emailPdfResult = await generateEmailPDFBase64(buildFilename('Inspection'));
+    if (isResubmit) {
+      setResubmitCount(newResubmitCount);
+      setLastResubmittedAt(newResubmittedAt);
+      setEditedAt(null);
+    }
+    // Close modal immediately; inspector can navigate while PDFs generate
+    setShowModal(false);
+    setDraftMsg("Generating report…");
+    // Generate PDFs in parallel (needs DOM refs — must happen before navigation)
+    const [pdfResult, supResult, emailPdfResult] = await Promise.all([
+      generatePDFBase64(buildFilename('Inspection')),
+      generateSuppliesPDFBase64(buildFilename('Supplies')),
+      generateEmailPDFBase64(buildFilename('Inspection')),
+    ]);
+    const pdfFilename    = pdfResult?.filename    ?? null;
+    const supFilename    = supResult?.filename    ?? null;
     const emailPdfBase64 = emailPdfResult?.base64 ?? null;
-
+    // Navigate away immediately — emails fire in background
+    setSubmitting(false);
+    setDraftMsg("");
+    onSaved?.();
     const inspectionEmails = pricing?.inspection_emails || [];
     const supplyEmails     = pricing?.supply_emails     || [];
-
     for (const em of inspectionEmails) {
-      if (!emailPdfBase64) break;
-      const { error: fnErr } = await supabase.functions.invoke("send-inspection-email", {
-        body: { recipient_email:em, pdf_filename:pdfFilename, house_num:info.house, room_num:info.room, tenant_name:info.tenant, inspector_name:info.inspector, date:info.date, grand_total:grandTotal, pdf_base64:emailPdfBase64 },
-      });
-      if (fnErr) console.error("Inspection email error:", fnErr);
+      if (emailPdfBase64) {
+        supabase.functions.invoke("send-inspection-email", {
+          body: { recipient_email:em, pdf_filename:pdfFilename, house_num:info.house, room_num:info.room, tenant_name:info.tenant, inspector_name:info.inspector, date:info.date, grand_total:grandTotal, pdf_base64:emailPdfBase64, is_resubmit:isResubmit },
+        }).catch(e=>console.error("Inspection email error:", e));
+      }
     }
-
     for (const em of supplyEmails) {
-      if (!supResult?.base64) break;
-      const { error: supErr } = await supabase.functions.invoke("send-inspection-email", {
-        body: { recipient_email:em, pdf_filename:supFilename, house_num:info.house, room_num:info.room, tenant_name:info.tenant, inspector_name:info.inspector, date:info.date, grand_total:grandTotal, pdf_base64:supResult.base64, supplies_mode:true },
-      });
-      if (supErr) console.error("Supplies email error:", supErr);
+      if (supResult?.base64) {
+        supabase.functions.invoke("send-inspection-email", {
+          body: { recipient_email:em, pdf_filename:supFilename, house_num:info.house, room_num:info.room, tenant_name:info.tenant, inspector_name:info.inspector, date:info.date, grand_total:grandTotal, pdf_base64:supResult.base64, supplies_mode:true, is_resubmit:isResubmit },
+        }).catch(e=>console.error("Supplies email error:", e));
+      }
     }
     if (extraEmail && emailPdfBase64) {
-      await supabase.functions.invoke("send-inspection-email", {
-        body: { recipient_email:extraEmail, pdf_filename:pdfFilename, house_num:info.house, room_num:info.room, tenant_name:info.tenant, inspector_name:info.inspector, date:info.date, grand_total:grandTotal, pdf_base64:emailPdfBase64 },
-      });
-    }
-
-    if (isElectron || isAndroid) {
-      // Native: PDF already saved/shared via platform layer
-      setSubmitting(false);
-      setSubmitted(true);
-    } else {
-      // Web: open print dialog so user can save as PDF manually
-      setPrintMode(true);
-      let restored = false;
-      const restore = () => {
-        if (restored) return;
-        restored = true;
-        setPrintMode(false);
-        setSubmitting(false);
-        setSubmitted(true);
-      };
-      setTimeout(()=>{
-        window.print();
-        window.addEventListener("afterprint", restore, {once:true});
-        setTimeout(restore, 15000);
-      }, 250);
+      supabase.functions.invoke("send-inspection-email", {
+        body: { recipient_email:extraEmail, pdf_filename:pdfFilename, house_num:info.house, room_num:info.room, tenant_name:info.tenant, inspector_name:info.inspector, date:info.date, grand_total:grandTotal, pdf_base64:emailPdfBase64, is_resubmit:isResubmit },
+      }).catch(e=>console.error("Extra email error:", e));
     }
   };
 
@@ -1798,7 +1792,7 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
             <button onClick={onBack} style={{background:"transparent",border:"none",color:"rgba(255,255,255,.6)",fontSize:13,cursor:"pointer",padding:0,marginBottom:2}}>← Back</button>
             <div style={{fontSize:15,fontWeight:800,color:"#FFF",display:"flex",alignItems:"center",gap:8}}>
               {existingId?"Edit Inspection":"New Inspection"}
-              {originalStatus==="submitted"&&<span style={{fontSize:11,fontWeight:700,background:"#166534",color:"#86EFAC",borderRadius:6,padding:"2px 8px",letterSpacing:".3px"}}>✓ Submitted</span>}
+              {editedAt?(<span style={{fontSize:11,fontWeight:700,background:"#92400E",color:"#FDE68A",borderRadius:6,padding:"2px 8px",letterSpacing:".3px"}}>✎ Edited · {new Date(editedAt).toLocaleDateString()}</span>):lastResubmittedAt?(<span style={{fontSize:11,fontWeight:700,background:"#166534",color:"#86EFAC",borderRadius:6,padding:"2px 8px",letterSpacing:".3px"}}>✓ Resubmitted · {new Date(lastResubmittedAt).toLocaleDateString()}</span>):originalStatus==="submitted"?(<span style={{fontSize:11,fontWeight:700,background:"#166534",color:"#86EFAC",borderRadius:6,padding:"2px 8px",letterSpacing:".3px"}}>✓ Submitted</span>):null}
             </div>
             <div style={{fontSize:11,color:"rgba(255,255,255,.5)"}}>
               {info.house?`House ${info.house}`:""}{info.tenant?` · ${info.tenant}`:""}
@@ -1882,29 +1876,35 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
                   {infoErrors.inspector&&<div style={{fontSize:11,color:"#B91C1C",marginTop:3}}>Required</div>}
                 </div>
                 <div style={{gridColumn:"span 2"}}>
-                  <div style={LBL}>Number of Bedrooms</div>
+                  <div style={LBL}>Number of Bedrooms <span style={{color:"#B91C1C"}}>*</span></div>
                   <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:5}}>
                     {[1,2,3,4,5,6].map(n=>(
-                      <button key={n} onClick={()=>setInfo(p=>({...p,numBeds:n}))} style={{width:44,height:44,borderRadius:10,cursor:"pointer",border:`2px solid ${info.numBeds===n?"#1E40AF":"#E2E8F0"}`,background:info.numBeds===n?"#EFF6FF":"#F8FAFC",color:info.numBeds===n?"#1E40AF":"#94A3B8",fontSize:16,fontWeight:info.numBeds===n?900:400}}>{n}</button>
+                      <button key={n} onClick={()=>{setInfo(p=>({...p,numBeds:n}));setInfoErrors(p=>({...p,numBeds:false}));}} style={{width:44,height:44,borderRadius:10,cursor:"pointer",border:`2px solid ${info.numBeds===n?"#1E40AF":infoErrors.numBeds?"#B91C1C":"#E2E8F0"}`,background:info.numBeds===n?"#EFF6FF":"#F8FAFC",color:info.numBeds===n?"#1E40AF":"#94A3B8",fontSize:16,fontWeight:info.numBeds===n?900:400}}>{n}</button>
                     ))}
                   </div>
-                  <div style={{marginTop:8,fontSize:12,color:"#94A3B8"}}>Shared split {numBeds} way{numBeds>1?"s":""} · Dirty: clean × rating × mod (3=×0.5, 4=×0.75, 5–10=×1)</div>
+                  {infoErrors.numBeds&&<div style={{fontSize:11,color:"#B91C1C",marginTop:3}}>Required</div>}
+                  {info.numBeds>0&&<div style={{marginTop:8,fontSize:12,color:"#94A3B8"}}>Shared split {numBeds} way{numBeds>1?"s":""} · Dirty: clean × rating × mod (3=×0.5, 4=×0.75, 5–10=×1)</div>}
                 </div>
               </div>
             </Card>
-            <button onClick={()=>{
-              const errs={};
-              if(!info.house.trim())   errs.house=true;
-              if(!info.room.trim())    errs.room=true;
-              if(!info.date.trim())    errs.date=true;
-              if(!info.inspector)      errs.inspector=true;
-              if(!infoPhotos.length)   errs.unitPhoto=true;
-              setInfoErrors(errs);
-              if(Object.keys(errs).length===0) {
-                setStarted(true); setTab("shared");
-                saveInspection("draft").then(()=>{ setDraftMsg("Draft auto-saved"); setTimeout(()=>setDraftMsg(""),4000); });
-              }
-            }} style={{...NEXT_BTN,display:"block",width:"100%"}}>Start Inspection →</button>
+            {existingId ? (
+              <button onClick={()=>setTab("shared")} style={{...NEXT_BTN,display:"block",width:"100%"}}>Shared Items →</button>
+            ) : (
+              <button onClick={()=>{
+                const errs={};
+                if(!info.house.trim())   errs.house=true;
+                if(!info.room.trim())    errs.room=true;
+                if(!info.date.trim())    errs.date=true;
+                if(!info.inspector)      errs.inspector=true;
+                if(!info.numBeds)        errs.numBeds=true;
+                if(!infoPhotos.length)   errs.unitPhoto=true;
+                setInfoErrors(errs);
+                if(Object.keys(errs).length===0) {
+                  setStarted(true); setTab("shared");
+                  saveInspection("draft").then(()=>{ setDraftMsg("Draft auto-saved"); setTimeout(()=>setDraftMsg(""),4000); });
+                }
+              }} style={{...NEXT_BTN,display:"block",width:"100%"}}>Start Inspection →</button>
+            )}
           </div>
         )}
 
@@ -2109,7 +2109,7 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
               <button onClick={()=>setTab("beds")} style={BACK_BTN}>← Edit</button>
               <button onClick={()=>{
                 if(!signatures.inspector){ alert("Inspector signature is required before submitting."); return; }
-                setSubmitted(false); setShowModal(true);
+                setShowModal(true);
               }} style={{flex:2,padding:"13px 0",background:"#0F2744",color:"#FFF",border:"none",borderRadius:12,fontSize:15,fontWeight:800,cursor:"pointer"}}>📤 Submit Report</button>
             </div>
           </div>
@@ -2118,11 +2118,7 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
 
       {showModal&&<SubmitModal
         loading={submitting}
-        result={submitted}
-        info={info}
-        grandTotal={grandTotal}
-        numBeds={numBeds}
-        onClose={()=>{ setShowModal(false); setSubmitted(false); if(submitted) onSaved?.(); }}
+        onClose={()=>setShowModal(false)}
         onSubmit={handleSubmit}
       />}
 
@@ -2178,7 +2174,7 @@ function ZoomWidget({ zoom, onChange }) {
 // MAIN APP  — auth + routing
 // ═══════════════════════════════════════════════════════════
 
-function NavShell({ children, navItems, view, onNav, onLogout }) {
+function NavShell({ children, navItems, view, onNav, onLogout, onRefresh }) {
   return (
     <div style={{display:"flex",flexDirection:"column",minHeight:"100vh"}}>
       <div style={{background:"#0F2744",padding:"10px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:200,boxShadow:"0 2px 8px rgba(0,0,0,.25)"}}>
@@ -2187,6 +2183,7 @@ function NavShell({ children, navItems, view, onNav, onLogout }) {
           {navItems.map(({k,l})=>(
             <button key={k} onClick={()=>onNav(k)} style={{padding:"6px 12px",background:view===k?"rgba(255,255,255,.2)":"transparent",color:"#FFF",border:"none",borderRadius:7,fontSize:12,fontWeight:view===k?700:400,cursor:"pointer"}}>{l}</button>
           ))}
+          <button onClick={onRefresh} title="Refresh" style={{padding:"6px 10px",background:"transparent",color:"rgba(255,255,255,.45)",border:"none",fontSize:17,cursor:"pointer",lineHeight:1}}>↻</button>
           <button onClick={onLogout} style={{padding:"6px 12px",background:"transparent",color:"rgba(255,255,255,.5)",border:"none",fontSize:12,cursor:"pointer"}}>Sign Out</button>
         </div>
       </div>
@@ -2203,6 +2200,7 @@ export default function App() {
   const [itLoginOpen, setItLoginOpen] = useState(false);
   const [zoom,        setZoom]        = useState(() => parseFloat(localStorage.getItem("appZoom") || "1"));
   const isLoggedInRef = useRef(false);
+  const [refreshKey,  setRefreshKey]  = useState(0);
 
   useEffect(() => {
     applyZoom(zoom);
@@ -2349,8 +2347,8 @@ export default function App() {
   if (profile.role==="inspector") {
     const nav=[{k:"inspections",l:"My Inspections"},{k:"new",l:"+ New"}];
     return (
-      <NavShell navItems={nav} view={view} onNav={setView} onLogout={logout}>
-        {view==="inspections" && <InspectionList profile={profile} showAll={false} onNew={()=>setView("new")} onSelect={i=>{setSelected(i);setView("detail");}}/>}
+      <NavShell navItems={nav} view={view} onNav={setView} onLogout={logout} onRefresh={()=>setRefreshKey(k=>k+1)}>
+        {view==="inspections" && <InspectionList profile={profile} showAll={false} onNew={()=>setView("new")} onSelect={i=>{setSelected(i);setView("detail");}} refreshKey={refreshKey}/>}
         {view==="new"         && <InspectionFormView profile={profile} pricing={pricing} onSaved={()=>setView("inspections")} onBack={()=>setView("inspections")}/>}
         {view==="detail"      && <InspectionFormView profile={profile} pricing={pricing} existingId={selected?.id} onSaved={()=>setView("inspections")} onBack={()=>setView("inspections")}/>}
         {zoomWidget}
@@ -2361,9 +2359,9 @@ export default function App() {
   // Admin
   const adminNav=[{k:"dashboard",l:"Dashboard"},{k:"history",l:"All Inspections"},{k:"new",l:"+ New"},{k:"settings",l:"Settings"},{k:"users",l:"Users"}];
   return (
-    <NavShell navItems={adminNav} view={view} onNav={setView} onLogout={logout}>
-      {view==="dashboard" && <AdminDashboard profile={profile} onNav={setView}/>}
-      {view==="history"   && <InspectionList profile={profile} showAll={true} onNew={()=>setView("new")} onSelect={i=>{setSelected(i);setView("detail");}}/>}
+    <NavShell navItems={adminNav} view={view} onNav={setView} onLogout={logout} onRefresh={()=>setRefreshKey(k=>k+1)}>
+      {view==="dashboard" && <AdminDashboard profile={profile} onNav={setView} refreshKey={refreshKey}/>}
+      {view==="history"   && <InspectionList profile={profile} showAll={true} onNew={()=>setView("new")} onSelect={i=>{setSelected(i);setView("detail");}} refreshKey={refreshKey}/>}
       {view==="new"       && <InspectionFormView profile={profile} pricing={pricing} onSaved={()=>setView("history")} onBack={()=>setView("dashboard")}/>}
       {view==="detail"    && <InspectionFormView profile={profile} pricing={pricing} existingId={selected?.id} onSaved={()=>setView("history")} onBack={()=>setView("history")}/>}
       {view==="settings"  && <AdminSettings profile={profile} pricing={pricing} onPricingUpdated={setPricing}/>}
