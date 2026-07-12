@@ -530,7 +530,7 @@ function PrintSupplies({ info, dynSupplies, stdChecks, supNotes="", extraSupplie
           <div style={{fontSize:12,fontWeight:700,color:"#0369A1",textTransform:"uppercase",letterSpacing:".5px",marginBottom:8}}>Supplies Checked</div>
           <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
             {checkedStd.map(s=><span key={s} style={{padding:"4px 14px",background:"#EFF6FF",color:"#0369A1",borderRadius:99,fontSize:12,fontWeight:700,border:"1px solid #BAE6FD"}}>{s}</span>)}
-            {checkedExtra.map(s=><span key={s.name} style={{padding:"4px 14px",background:"#EFF6FF",color:"#0369A1",borderRadius:99,fontSize:12,fontWeight:700,border:"1px solid #BAE6FD"}}>{s.name}{s.qty>1?` ×${s.qty}`:""}</span>)}
+            {checkedExtra.map(s=>{const q=stdChecks?.[s.name];return <span key={s.name} style={{padding:"4px 14px",background:"#EFF6FF",color:"#0369A1",borderRadius:99,fontSize:12,fontWeight:700,border:"1px solid #BAE6FD"}}>{s.name}{typeof q==="number"&&q>1?` ×${q}`:""}</span>;})}
           </div>
         </div>
       )}
@@ -680,24 +680,26 @@ function ItemTable({ items, onSave, groups }) {
 
 const DEFAULT_INSPECTORS = ["101","102","103","104","105","106"];
 
-const toSupplyObj = s => (s && typeof s === "object") ? s : {name:String(s),qty:1};
+const toSupplyObj = s => {
+  if (s && typeof s === "object") return {name:s.name, needs_qty:!!(s.needs_qty ?? s.qty > 1)};
+  return {name:String(s), needs_qty:false};
+};
 
 function AddSupplyRow({ onAdd }) {
   const [name,setName]=useState("");
-  const [qty,setQty]=useState(1);
+  const [needsQty,setNeedsQty]=useState(false);
   const submit=()=>{
     const t=name.trim(); if(!t)return;
-    onAdd({name:t,qty}); setName(""); setQty(1);
+    onAdd({name:t,needs_qty:needsQty}); setName(""); setNeedsQty(false);
   };
   return (
     <div style={{display:"flex",gap:8,marginTop:16,alignItems:"center"}}>
       <input value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()}
         placeholder="e.g. Drain Cleaner" style={{...INPUT_ST,flex:1}}/>
-      <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-        <span style={{fontSize:12,color:"#64748B",fontWeight:600}}>Qty</span>
-        <input type="number" min={1} max={99} value={qty} onChange={e=>setQty(Math.max(1,parseInt(e.target.value)||1))}
-          style={{...INPUT_ST,width:58,textAlign:"center",padding:"8px 6px"}}/>
-      </div>
+      <label style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer",flexShrink:0,padding:"0 4px"}}>
+        <input type="checkbox" checked={needsQty} onChange={e=>setNeedsQty(e.target.checked)} style={{width:15,height:15,cursor:"pointer"}}/>
+        <span style={{fontSize:12,color:"#475569",fontWeight:600,whiteSpace:"nowrap"}}>Qty field</span>
+      </label>
       <button onClick={submit} style={{padding:"8px 18px",background:"#1E40AF",color:"#FFF",border:"none",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",flexShrink:0}}>Add</button>
     </div>
   );
@@ -821,7 +823,12 @@ function AdminSettings({ profile, pricing, onPricingUpdated }) {
                     disabled={i===extraSupplies.length-1} style={{background:"#F1F5F9",border:"none",borderRadius:4,padding:"1px 7px",cursor:i===extraSupplies.length-1?"default":"pointer",fontSize:12,color:i===extraSupplies.length-1?"#CBD5E1":"#475569",lineHeight:1.4}}>↓</button>
                 </div>
                 <span style={{flex:1,fontSize:14,color:"#1E293B"}}>{s.name}</span>
-                {s.qty>1&&<span style={{fontSize:12,fontWeight:700,color:"#0369A1",background:"#EFF6FF",borderRadius:6,padding:"2px 8px",flexShrink:0}}>×{s.qty}</span>}
+                <label style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer",flexShrink:0}}>
+                  <input type="checkbox" checked={!!s.needs_qty}
+                    onChange={()=>{const u=extraSupplies.map((x,j)=>j===i?{...x,needs_qty:!x.needs_qty}:x);setExtraSupplies(u);save("extra_supplies",u);}}
+                    style={{width:14,height:14,cursor:"pointer"}}/>
+                  <span style={{fontSize:12,color:"#475569",fontWeight:600}}>Qty</span>
+                </label>
                 <button onClick={()=>removeItem(extraSupplies,setExtraSupplies,"extra_supplies",i)} style={{background:"#FEE2E2",color:"#B91C1C",border:"none",borderRadius:6,padding:"3px 12px",cursor:"pointer",fontSize:12,fontWeight:700,flexShrink:0}}>Remove</button>
               </div>
             ))}
@@ -1463,7 +1470,7 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
   const [shared,      setShared]      = useState(()=>Object.fromEntries(sharedItems.map(i=>[i.id,defItem()])));
   const [beds,        setBeds]        = useState(()=>[0,1,2,3,4,5].map(defBed));
   const extraSuppObjs = (pricing?.extra_supplies||[]).map(toSupplyObj);
-  const allSupplies = [...STD_SUPPLIES.map(s=>({name:s,qty:1})), ...extraSuppObjs];
+  const allSupplies = [...STD_SUPPLIES.map(s=>({name:s,needs_qty:false})), ...extraSuppObjs];
   const [stdChecks,   setStdChecks]   = useState(Object.fromEntries(allSupplies.map(s=>[s.name,false])));
   const [supNotes,    setSupNotes]    = useState("");
   const [signatures,  setSignatures]  = useState({inspector:null,tenant:null});
@@ -2106,14 +2113,28 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
                 </div>
               );
             })()}
-              {allSupplies.map(s=>(
-                <label key={s.name} style={{display:"flex",alignItems:"center",gap:12,padding:"9px 0",borderBottom:"1px solid #F0F9FF",cursor:"pointer"}}>
-                  <input type="checkbox" checked={!!stdChecks[s.name]} onChange={()=>setStdChecks(p=>({...p,[s.name]:!p[s.name]}))} style={{width:18,height:18,cursor:"pointer",accentColor:"#0369A1"}}/>
-                  <span style={{fontSize:14,color:stdChecks[s.name]?"#94A3B8":"#1E293B",textDecoration:stdChecks[s.name]?"line-through":"none"}}>
-                    {s.name}{s.qty>1?<span style={{fontSize:12,fontWeight:700,color:"#0369A1",marginLeft:6}}>×{s.qty}</span>:null}
-                  </span>
-                </label>
-              ))}
+              {allSupplies.map(s=>{
+                const checked=!!stdChecks[s.name];
+                const qty=typeof stdChecks[s.name]==="number"?stdChecks[s.name]:1;
+                return (
+                  <div key={s.name} style={{padding:"9px 0",borderBottom:"1px solid #F0F9FF"}}>
+                    <label style={{display:"flex",alignItems:"center",gap:12,cursor:"pointer"}}>
+                      <input type="checkbox" checked={checked}
+                        onChange={()=>setStdChecks(p=>({...p,[s.name]:p[s.name]?false:(s.needs_qty?1:true)}))}
+                        style={{width:18,height:18,cursor:"pointer",accentColor:"#0369A1"}}/>
+                      <span style={{fontSize:14,color:checked?"#94A3B8":"#1E293B",textDecoration:checked?"line-through":"none"}}>{s.name}</span>
+                    </label>
+                    {s.needs_qty&&checked&&(
+                      <div style={{marginLeft:30,marginTop:5,display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontSize:12,color:"#64748B",fontWeight:600}}>Qty:</span>
+                        <input type="number" min={1} value={qty}
+                          onChange={e=>setStdChecks(p=>({...p,[s.name]:Math.max(1,parseInt(e.target.value)||1)}))}
+                          style={{width:62,border:"1px solid #CBD5E1",borderRadius:6,padding:"4px 8px",fontSize:14,textAlign:"center"}}/>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               <div style={{marginTop:14}}>
                 <div style={LBL}>Additional Notes</div>
                 <textarea value={supNotes} onChange={e=>setSupNotes(e.target.value)}
