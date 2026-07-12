@@ -1847,22 +1847,11 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
       payload: { recipient_email:extraEmail, pdf_filename:pdfFilename, house_num:info.house, room_num:info.room, tenant_name:info.tenant, inspector_name:info.inspector, date:info.date, grand_total:grandTotal, pdf_base64:emailPdfBase64, is_resubmit:isResubmit },
     });
     if (pendingRows.length) {
-      let queued = false;
       try {
-        const { error: insertErr } = await raceTimeout(
-          supabase.from("pending_emails").insert(pendingRows)
-        );
-        if (!insertErr) {
-          queued = true;
-          processPendingEmails(profile.org_id).catch(()=>{});
-        } else {
-          console.error("Failed to queue emails:", insertErr.message);
-        }
+        await raceTimeout(supabase.from("pending_emails").insert(pendingRows));
+        processPendingEmails(profile.org_id).catch(()=>{});
       } catch(e) {
-        console.error("Email queue timed out:", e.message);
-      }
-      if (!queued) {
-        // Fall back to direct send
+        // DB unavailable — fall back to direct send (best effort)
         for (const row of pendingRows) {
           raceTimeout(supabase.functions.invoke("send-inspection-email", { body:row.payload }), 20000)
             .catch(fe=>console.error("Fallback email error:", fe.message));
