@@ -501,9 +501,10 @@ function PrintReport({ info, numBeds, sharedItems, bedItems, shared, beds,
 // SUPPLIES PRINT SHEET
 // ═══════════════════════════════════════════════════════════
 
-function PrintSupplies({ info, dynSupplies, stdChecks, supNotes="" }) {
-  const checkedStd = STD_SUPPLIES.filter(s => stdChecks?.[s]);
-  const hasItems   = dynSupplies.length > 0 || checkedStd.length > 0;
+function PrintSupplies({ info, dynSupplies, stdChecks, supNotes="", extraSupplies=[] }) {
+  const checkedStd   = STD_SUPPLIES.filter(s => stdChecks?.[s]);
+  const checkedExtra = extraSupplies.filter(s => stdChecks?.[s.name]);
+  const hasItems     = dynSupplies.length > 0 || checkedStd.length > 0 || checkedExtra.length > 0;
   return (
     <div style={{fontFamily:"Arial,sans-serif",padding:20,maxWidth:760,margin:"0 auto"}}>
       <div style={{background:"#065F46",color:"white",padding:"14px 20px",marginBottom:16}}>
@@ -524,11 +525,12 @@ function PrintSupplies({ info, dynSupplies, stdChecks, supNotes="" }) {
           </div>
         </div>
       )}
-      {checkedStd.length>0&&(
+      {(checkedStd.length>0||checkedExtra.length>0)&&(
         <div style={{marginBottom:20}}>
-          <div style={{fontSize:12,fontWeight:700,color:"#0369A1",textTransform:"uppercase",letterSpacing:".5px",marginBottom:8}}>Standard Supplies Checked</div>
+          <div style={{fontSize:12,fontWeight:700,color:"#0369A1",textTransform:"uppercase",letterSpacing:".5px",marginBottom:8}}>Supplies Checked</div>
           <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
             {checkedStd.map(s=><span key={s} style={{padding:"4px 14px",background:"#EFF6FF",color:"#0369A1",borderRadius:99,fontSize:12,fontWeight:700,border:"1px solid #BAE6FD"}}>{s}</span>)}
+            {checkedExtra.map(s=><span key={s.name} style={{padding:"4px 14px",background:"#EFF6FF",color:"#0369A1",borderRadius:99,fontSize:12,fontWeight:700,border:"1px solid #BAE6FD"}}>{s.name}{s.qty>1?` ×${s.qty}`:""}</span>)}
           </div>
         </div>
       )}
@@ -678,6 +680,29 @@ function ItemTable({ items, onSave, groups }) {
 
 const DEFAULT_INSPECTORS = ["101","102","103","104","105","106"];
 
+const toSupplyObj = s => (s && typeof s === "object") ? s : {name:String(s),qty:1};
+
+function AddSupplyRow({ onAdd }) {
+  const [name,setName]=useState("");
+  const [qty,setQty]=useState(1);
+  const submit=()=>{
+    const t=name.trim(); if(!t)return;
+    onAdd({name:t,qty}); setName(""); setQty(1);
+  };
+  return (
+    <div style={{display:"flex",gap:8,marginTop:16,alignItems:"center"}}>
+      <input value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()}
+        placeholder="e.g. Drain Cleaner" style={{...INPUT_ST,flex:1}}/>
+      <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+        <span style={{fontSize:12,color:"#64748B",fontWeight:600}}>Qty</span>
+        <input type="number" min={1} max={99} value={qty} onChange={e=>setQty(Math.max(1,parseInt(e.target.value)||1))}
+          style={{...INPUT_ST,width:58,textAlign:"center",padding:"8px 6px"}}/>
+      </div>
+      <button onClick={submit} style={{padding:"8px 18px",background:"#1E40AF",color:"#FFF",border:"none",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",flexShrink:0}}>Add</button>
+    </div>
+  );
+}
+
 function AddItemRow({ onAdd, placeholder, validate }) {
   const [val,setVal]=useState("");
   const [err,setErr]=useState("");
@@ -703,7 +728,7 @@ function AdminSettings({ profile, pricing, onPricingUpdated }) {
   const [sharedItems,setSharedItemsL]=useState(pricing?.shared_items||SHARED_ITEMS);
   const [bedItems,setBedItemsL]=useState(pricing?.bed_items||BED_ITEMS);
   const [mults,setMults]=useState(pricing?.mults||DEFAULT_MULTS);
-  const [extraSupplies,setExtraSupplies]=useState(pricing?.extra_supplies||[]);
+  const [extraSupplies,setExtraSupplies]=useState((pricing?.extra_supplies||[]).map(toSupplyObj));
   const [inspectors,setInspectors]=useState(pricing?.inspectors||DEFAULT_INSPECTORS);
   const [inspEmails,setInspEmails]=useState(pricing?.inspection_emails||[]);
   const [supEmails,setSupEmails]=useState(pricing?.supply_emails||[]);
@@ -788,14 +813,19 @@ function AdminSettings({ profile, pricing, onPricingUpdated }) {
               </div>
             ))}
             {extraSupplies.map((s,i)=>(
-              <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:"1px solid #F1F5F9"}}>
-                <span style={{fontSize:14,color:"#1E293B"}}>{s}</span>
-                <button onClick={()=>removeItem(extraSupplies,setExtraSupplies,"extra_supplies",i)} style={{background:"#FEE2E2",color:"#B91C1C",border:"none",borderRadius:6,padding:"3px 12px",cursor:"pointer",fontSize:12,fontWeight:700}}>Remove</button>
+              <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 0",borderBottom:"1px solid #F1F5F9"}}>
+                <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                  <button onClick={()=>{if(i<=0)return;const u=[...extraSupplies];[u[i-1],u[i]]=[u[i],u[i-1]];setExtraSupplies(u);save("extra_supplies",u);}}
+                    disabled={i===0} style={{background:"#F1F5F9",border:"none",borderRadius:4,padding:"1px 7px",cursor:i===0?"default":"pointer",fontSize:12,color:i===0?"#CBD5E1":"#475569",lineHeight:1.4}}>↑</button>
+                  <button onClick={()=>{if(i>=extraSupplies.length-1)return;const u=[...extraSupplies];[u[i+1],u[i]]=[u[i],u[i+1]];setExtraSupplies(u);save("extra_supplies",u);}}
+                    disabled={i===extraSupplies.length-1} style={{background:"#F1F5F9",border:"none",borderRadius:4,padding:"1px 7px",cursor:i===extraSupplies.length-1?"default":"pointer",fontSize:12,color:i===extraSupplies.length-1?"#CBD5E1":"#475569",lineHeight:1.4}}>↓</button>
+                </div>
+                <span style={{flex:1,fontSize:14,color:"#1E293B"}}>{s.name}</span>
+                {s.qty>1&&<span style={{fontSize:12,fontWeight:700,color:"#0369A1",background:"#EFF6FF",borderRadius:6,padding:"2px 8px",flexShrink:0}}>×{s.qty}</span>}
+                <button onClick={()=>removeItem(extraSupplies,setExtraSupplies,"extra_supplies",i)} style={{background:"#FEE2E2",color:"#B91C1C",border:"none",borderRadius:6,padding:"3px 12px",cursor:"pointer",fontSize:12,fontWeight:700,flexShrink:0}}>Remove</button>
               </div>
             ))}
-            <div style={{marginTop:16}}>
-              <AddItemRow onAdd={item=>{ const u=[...extraSupplies,item]; setExtraSupplies(u); save("extra_supplies",u); }} placeholder="e.g. Drain Cleaner"/>
-            </div>
+            <AddSupplyRow onAdd={item=>{ const u=[...extraSupplies,item]; setExtraSupplies(u); save("extra_supplies",u); }}/>
           </div>
         )}
         {aTab==="inspectors"&&(
@@ -1432,8 +1462,9 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
   const [sharedPhotos,setSharedPhotos]= useState([]);
   const [shared,      setShared]      = useState(()=>Object.fromEntries(sharedItems.map(i=>[i.id,defItem()])));
   const [beds,        setBeds]        = useState(()=>[0,1,2,3,4,5].map(defBed));
-  const allSupplies = [...STD_SUPPLIES, ...(pricing?.extra_supplies||[])];
-  const [stdChecks,   setStdChecks]   = useState(Object.fromEntries(allSupplies.map(s=>[s,false])));
+  const extraSuppObjs = (pricing?.extra_supplies||[]).map(toSupplyObj);
+  const allSupplies = [...STD_SUPPLIES.map(s=>({name:s,qty:1})), ...extraSuppObjs];
+  const [stdChecks,   setStdChecks]   = useState(Object.fromEntries(allSupplies.map(s=>[s.name,false])));
   const [supNotes,    setSupNotes]    = useState("");
   const [signatures,  setSignatures]  = useState({inspector:null,tenant:null});
   const [tab,         setTab]         = useState("info");
@@ -1621,7 +1652,7 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
       setBeds(savedBeds);
       const es = data.extra_shared ? (()=>{ try{ return JSON.parse(data.extra_shared); }catch{ return defExtra(); } })() : defExtra();
       setExtraShared(es);
-      setStdChecks({...Object.fromEntries(allSupplies.map(s=>[s,false])), ...(data.std_checks||{})});
+      setStdChecks({...Object.fromEntries(allSupplies.map(s=>[s.name,false])), ...(data.std_checks||{})});
       setSupNotes(data.sup_notes||"");
       setOriginalStatus(data.status||"draft");
       skipAutoSave.current = true;
@@ -2076,9 +2107,11 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
               );
             })()}
               {allSupplies.map(s=>(
-                <label key={s} style={{display:"flex",alignItems:"center",gap:12,padding:"9px 0",borderBottom:"1px solid #F0F9FF",cursor:"pointer"}}>
-                  <input type="checkbox" checked={!!stdChecks[s]} onChange={()=>setStdChecks(p=>({...p,[s]:!p[s]}))} style={{width:18,height:18,cursor:"pointer",accentColor:"#0369A1"}}/>
-                  <span style={{fontSize:14,color:stdChecks[s]?"#94A3B8":"#1E293B",textDecoration:stdChecks[s]?"line-through":"none"}}>{s}</span>
+                <label key={s.name} style={{display:"flex",alignItems:"center",gap:12,padding:"9px 0",borderBottom:"1px solid #F0F9FF",cursor:"pointer"}}>
+                  <input type="checkbox" checked={!!stdChecks[s.name]} onChange={()=>setStdChecks(p=>({...p,[s.name]:!p[s.name]}))} style={{width:18,height:18,cursor:"pointer",accentColor:"#0369A1"}}/>
+                  <span style={{fontSize:14,color:stdChecks[s.name]?"#94A3B8":"#1E293B",textDecoration:stdChecks[s.name]?"line-through":"none"}}>
+                    {s.name}{s.qty>1?<span style={{fontSize:12,fontWeight:700,color:"#0369A1",marginLeft:6}}>×{s.qty}</span>:null}
+                  </span>
                 </label>
               ))}
               <div style={{marginTop:14}}>
@@ -2142,7 +2175,7 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
         />
       </div>
       <div ref={hiddenSuppliesRef} style={{position:"fixed",top:"100vh",left:0,width:780,background:"#fff",zIndex:-1,pointerEvents:"none"}}>
-        <PrintSupplies info={info} dynSupplies={dynSupplies} stdChecks={stdChecks} supNotes={supNotes} />
+        <PrintSupplies info={info} dynSupplies={dynSupplies} stdChecks={stdChecks} supNotes={supNotes} extraSupplies={extraSuppObjs} />
       </div>
     </div>
   );
