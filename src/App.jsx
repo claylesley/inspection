@@ -1008,9 +1008,9 @@ function ExtraChargeField({ note, amount, onNoteChange, onAmountChange, label="E
 
 function Card({children,color="#1E40AF",title,subtitle,total,mb=16}) {
   return (
-    <div style={{background:"#FFF",borderRadius:14,boxShadow:"0 1px 4px rgba(0,0,0,.09)",marginBottom:mb,overflow:"hidden"}}>
+    <div style={{background:"#FFF",borderRadius:14,boxShadow:"0 1px 4px rgba(0,0,0,.09)",marginBottom:mb}}>
       {title&&(
-        <div style={{background:color,padding:"13px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{background:color,padding:"13px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",borderRadius:"14px 14px 0 0"}}>
           <div>
             <div style={{fontSize:15,fontWeight:800,color:"#FFF",letterSpacing:"-.2px"}}>{title}</div>
             {subtitle&&<div style={{fontSize:11,color:"rgba(255,255,255,.65)",marginTop:2}}>{subtitle}</div>}
