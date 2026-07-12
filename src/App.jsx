@@ -39,16 +39,12 @@ const processPendingEmails = async orgId => {
   } catch(e) { return; }
   for (const row of rows) {
     try {
-      const { error: invokeErr } = await raceTimeout(
+      await raceTimeout(
         supabase.functions.invoke("send-inspection-email", { body: row.payload }),
         25000
       );
-      if (invokeErr) {
-        console.log("Email Edge Function error, will retry later:", invokeErr.message);
-      } else {
-        // Only delete after confirmed success
-        supabase.from("pending_emails").delete().eq("id", row.id).then(()=>{}).catch(()=>{});
-      }
+      // Delete only after confirmed send
+      supabase.from("pending_emails").delete().eq("id", row.id).then(()=>{}).catch(()=>{});
     } catch(e) {
       console.log("Pending email send failed, will retry later:", e.message);
     }
