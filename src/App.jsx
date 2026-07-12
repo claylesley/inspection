@@ -16,6 +16,17 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
+// Race any Supabase promise against a timeout so a slow/dropped connection
+// doesn't hang the UI indefinitely. The underlying fetch may still complete
+// (safe for idempotent upserts); we just unblock the UI.
+const raceTimeout = (promise, ms = 9000) =>
+  Promise.race([
+    promise,
+    new Promise((_, rej) =>
+      setTimeout(() => rej(Object.assign(new Error("timeout"), {isTimeout:true})), ms)
+    )
+  ]);
+
 // ═══════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════
@@ -1168,8 +1179,9 @@ function InspectionList({ profile, onSelect, onNew, showAll=false, refreshKey=0 
         .select("id,house_num,room_num,tenant_name,inspection_date,grand_total,status,inspector_id,profiles(full_name)")
         .eq("org_id",profile.org_id).order("created_at",{ascending:false}).limit(100);
       if (!showAll) q = q.eq("inspector_id",profile.id);
-      const { data } = await q;
-      setInspections(data||[]);
+      let listRes;
+      try { listRes = await raceTimeout(q); } catch(e) { listRes = {data:null}; }
+      setInspections(listRes.data||[]);
       setLoading(false);
     })();
   },[profile,showAll,refreshKey]);
@@ -1627,7 +1639,7 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
   // Load existing inspection from Supabase
   useEffect(()=>{
     if (!existingId) return;
-    supabase.from("inspections").select("*").eq("id",existingId).single().then(({data})=>{
+    raceTimeout(supabase.from("inspections").select("*").eq("id",existingId).single()).then(({data})=>{
       if (!data) { setLoaded(true); return; }
       setInfo({
         house:    data.house_num||"",
@@ -1733,9 +1745,20 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
       status,
       ...(status==="submitted"?{submitted_at:new Date().toISOString()}:{}),
     };
-    const { data, error } = savedIdRef.current
-      ? await supabase.from("inspections").update(payload).eq("id",savedIdRef.current).select().single()
-      : await supabase.from("inspections").insert(payload).select().single();
+    let saveResult;
+    try {
+      saveResult = await raceTimeout(
+        savedIdRef.current
+          ? supabase.from("inspections").update(payload).eq("id",savedIdRef.current).select().single()
+          : supabase.from("inspections").insert(payload).select().single()
+      );
+    } catch(e) {
+      setSaving(false);
+      setDraftMsg("Connection slow — changes may not have saved");
+      setTimeout(()=>setDraftMsg(""),5000);
+      return null;
+    }
+    const { data, error } = saveResult;
     setSaving(false);
     if (error) { alert("Save error: "+error.message); return null; }
     if (!savedIdRef.current && data?.id) savedIdRef.current = data.id;
@@ -1779,22 +1802,22 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
     const supplyEmails     = pricing?.supply_emails     || [];
     for (const em of inspectionEmails) {
       if (emailPdfBase64) {
-        supabase.functions.invoke("send-inspection-email", {
+        raceTimeout(supabase.functions.invoke("send-inspection-email", {
           body: { recipient_email:em, pdf_filename:pdfFilename, house_num:info.house, room_num:info.room, tenant_name:info.tenant, inspector_name:info.inspector, date:info.date, grand_total:grandTotal, pdf_base64:emailPdfBase64, is_resubmit:isResubmit },
-        }).catch(e=>console.error("Inspection email error:", e));
+        }), 20000).catch(e=>console.error("Inspection email error:", e.message));
       }
     }
     for (const em of supplyEmails) {
       if (supResult?.base64) {
-        supabase.functions.invoke("send-inspection-email", {
+        raceTimeout(supabase.functions.invoke("send-inspection-email", {
           body: { recipient_email:em, pdf_filename:supFilename, house_num:info.house, room_num:info.room, tenant_name:info.tenant, inspector_name:info.inspector, date:info.date, grand_total:grandTotal, pdf_base64:supResult.base64, supplies_mode:true, is_resubmit:isResubmit },
-        }).catch(e=>console.error("Supplies email error:", e));
+        }), 20000).catch(e=>console.error("Supplies email error:", e.message));
       }
     }
     if (extraEmail && emailPdfBase64) {
-      supabase.functions.invoke("send-inspection-email", {
+      raceTimeout(supabase.functions.invoke("send-inspection-email", {
         body: { recipient_email:extraEmail, pdf_filename:pdfFilename, house_num:info.house, room_num:info.room, tenant_name:info.tenant, inspector_name:info.inspector, date:info.date, grand_total:grandTotal, pdf_base64:emailPdfBase64, is_resubmit:isResubmit },
-      }).catch(e=>console.error("Extra email error:", e));
+      }), 20000).catch(e=>console.error("Extra email error:", e.message));
     }
   };
 
@@ -2340,13 +2363,19 @@ export default function App() {
   },[]);
 
   const loadProfile = async authUser => {
-    const {data:prof, error:profErr} = await supabase.from("profiles").select("*").eq("id",authUser.id).single();
+    let profRes;
+    try { profRes = await raceTimeout(supabase.from("profiles").select("*").eq("id",authUser.id).single()); }
+    catch(e) { console.error("Profile load timed out:", e.message); setView("login"); return; }
+    const {data:prof, error:profErr} = profRes;
     if (profErr) console.error("Profile query error:", profErr);
     if (!prof) { setView("login"); return; }
     setProfile(prof);
     if (prof.role === "it_admin") { setView("it-terminal"); return; }
-    const {data:pc, error:pcErr} = await supabase.from("pricing_config").select("*").eq("org_id",prof.org_id).single();
-    if (pcErr) console.warn("Pricing config query:", pcErr);
+    let pcRes;
+    try { pcRes = await raceTimeout(supabase.from("pricing_config").select("*").eq("org_id",prof.org_id).single()); }
+    catch(e) { pcRes = {data:null, error:e}; }
+    const {data:pc, error:pcErr} = pcRes;
+    if (pcErr && !pcErr.isTimeout) console.warn("Pricing config query:", pcErr);
 
     // Auto-seed any columns that are null or empty so defaults are always visible
     const seeds = {};
