@@ -916,7 +916,7 @@ function DirtyRater({value=0,onChange,dirtyRate=0,mults=DEFAULT_MULTS}) {
   );
 }
 
-function ItemRow({item,state={},onChange,mults=DEFAULT_MULTS,showError=false}) {
+function ItemRow({item,state={},onChange,mults=DEFAULT_MULTS,showError=false,readOnly=false}) {
   const fileRef    = useRef(null);
   const [preview,    setPreview]    = useState(null);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -994,12 +994,12 @@ function ItemRow({item,state={},onChange,mults=DEFAULT_MULTS,showError=false}) {
                 <div key={i} style={{position:"relative",flexShrink:0}}>
                   <img src={src} alt={`${item.label} ${i+1}`} onClick={()=>setPreview(src)}
                     style={{width:54,height:54,objectFit:"cover",borderRadius:7,border:"2px solid #E2E8F0",cursor:"pointer",display:"block"}}/>
-                  <button onClick={()=>removePhoto(i)} style={{
+                  {!readOnly&&<button onClick={()=>removePhoto(i)} style={{
                     position:"absolute",top:-6,right:-6,width:18,height:18,
                     borderRadius:"50%",background:"#DC2626",color:"#FFF",
                     border:"2px solid #FFF",cursor:"pointer",fontSize:11,fontWeight:900,
                     display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1,
-                  }}>×</button>
+                  }}>×</button>}
                 </div>
               ))}
             </div>
@@ -1060,7 +1060,7 @@ function Card({children,color="#1E40AF",title,subtitle,total,mb=16}) {
   );
 }
 
-function PhotoCapture({ photos=[], onAdd, onRemove, label="Photos" }) {
+function PhotoCapture({ photos=[], onAdd, onRemove, label="Photos", readOnly=false }) {
   const fileRef = useRef(null);
   const [preview,    setPreview]    = useState(null);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -1094,7 +1094,7 @@ function PhotoCapture({ photos=[], onAdd, onRemove, label="Photos" }) {
             <div key={i} style={{position:"relative",flexShrink:0}}>
               <img src={src} alt={`Photo ${i+1}`} onClick={()=>setPreview(src)}
                 style={{width:80,height:80,objectFit:"cover",borderRadius:8,border:"2px solid #E2E8F0",cursor:"pointer",display:"block"}}/>
-              <button onClick={()=>onRemove(i)} style={{position:"absolute",top:-7,right:-7,width:22,height:22,borderRadius:"50%",background:"#DC2626",color:"#FFF",border:"2px solid #FFF",cursor:"pointer",fontSize:13,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>×</button>
+              {!readOnly&&<button onClick={()=>onRemove(i)} style={{position:"absolute",top:-7,right:-7,width:22,height:22,borderRadius:"50%",background:"#DC2626",color:"#FFF",border:"2px solid #FFF",cursor:"pointer",fontSize:13,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>×</button>}
             </div>
           ))}
         </div>
@@ -1889,6 +1889,7 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
                     onAdd={src=>{setInfoPhotos(p=>[...p,src]);setInfoErrors(p=>({...p,unitPhoto:false}));}}
                     onRemove={i=>setInfoPhotos(p=>p.filter((_,j)=>j!==i))}
                     label=""
+                    readOnly={originalStatus==="submitted"}
                   />
                   {infoErrors.unitPhoto&&<div style={{fontSize:11,color:"#B91C1C",marginTop:3}}>At least one photo is required</div>}
                 </div>
@@ -1954,7 +1955,7 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
                 const items=sharedItems.filter(i=>i.group===grp);
                 if(!items.length)return null;
                 return (<div key={grp}><div style={{fontSize:10,fontWeight:700,color:"#94A3B8",textTransform:"uppercase",letterSpacing:"1px",marginTop:14,marginBottom:2}}>{grp}</div>
-                  {items.map(item=><ItemRow key={item.id} item={item} state={shared[item.id]} onChange={v=>setSharedItem(item.id,v)} mults={mults} showError={sharedShowErrors&&!shared[item.id]?.status}/>)}
+                  {items.map(item=><ItemRow key={item.id} item={item} state={shared[item.id]} onChange={v=>setSharedItem(item.id,v)} mults={mults} showError={sharedShowErrors&&!shared[item.id]?.status} readOnly={originalStatus==="submitted"}/>)}
                 </div>);
               })}
               <ExtraChargeField
@@ -1968,6 +1969,7 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
                 onAdd={addSharedPhoto}
                 onRemove={removeSharedPhoto}
                 label="Shared Space Photos"
+                readOnly={originalStatus==="submitted"}
               />
             </Card>
             {sharedShowErrors&&sharedItems.some(i=>!shared[i.id]?.status)&&(
@@ -1991,10 +1993,10 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
           <div>
             {beds.slice(0,numBeds).map((bed,bi)=>(
               <Card key={bi} color="#1E3A5F" title={bedLabels[bi]} subtitle="Individual room charges" total={bedTotals[bi]} mb={14}>
-                {bedItems.filter(i=>!i.bath).map(item=><ItemRow key={item.id} item={item} state={bed.items?.[item.id]} onChange={v=>setBedItem(bi,item.id,v)} mults={mults} showError={bedsShowErrors&&!bed.items?.[item.id]?.status}/>)}
+                {bedItems.filter(i=>!i.bath).map(item=><ItemRow key={item.id} item={item} state={bed.items?.[item.id]} onChange={v=>setBedItem(bi,item.id,v)} mults={mults} showError={bedsShowErrors&&!bed.items?.[item.id]?.status} readOnly={originalStatus==="submitted"}/>)}
                 <div style={{margin:"12px 0 4px",padding:"0 12px 8px",background:"#F8FAFC",borderRadius:10,border:"1px solid #F1F5F9"}}>
                   <div style={{fontSize:10,fontWeight:700,color:"#94A3B8",textTransform:"uppercase",letterSpacing:"1px",padding:"10px 0 2px"}}>Bathroom</div>
-                  {bedItems.filter(i=>i.bath).map(item=><ItemRow key={item.id} item={item} state={bed.items?.[item.id]} onChange={v=>setBedItem(bi,item.id,v)} mults={mults} showError={bedsShowErrors&&!bed.items?.[item.id]?.status}/>)}
+                  {bedItems.filter(i=>i.bath).map(item=><ItemRow key={item.id} item={item} state={bed.items?.[item.id]} onChange={v=>setBedItem(bi,item.id,v)} mults={mults} showError={bedsShowErrors&&!bed.items?.[item.id]?.status} readOnly={originalStatus==="submitted"}/>)}
                 </div>
                 <ExtraChargeField
                   note={bed.extraNote||""} amount={bed.extraAmount||""}
@@ -2013,6 +2015,7 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
                   onAdd={src=>addBedPhoto(bi,src)}
                   onRemove={i=>removeBedPhoto(bi,i)}
                   label={`${bedLabels[bi]} Photos`}
+                  readOnly={originalStatus==="submitted"}
                 />
                 <div style={{marginTop:12,padding:"10px 14px",background:"#F0F9FF",borderRadius:10,border:"1px solid #BAE6FD"}}>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:12,color:"#0369A1"}}>Room item charges</span><span style={{fontSize:12,color:"#0369A1",fontWeight:700}}>${bedItemsTotals[bi].toFixed(2)}</span></div>
