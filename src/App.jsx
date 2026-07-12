@@ -27,6 +27,30 @@ const raceTimeout = (promise, ms = 9000) =>
     )
   ]);
 
+// Process any emails queued in pending_emails for this org. Called on login
+// and when the device comes back online, so emails survive connection drops.
+const processPendingEmails = async orgId => {
+  let rows;
+  try {
+    const res = await raceTimeout(
+      supabase.from("pending_emails").select("id,payload").eq("org_id", orgId)
+    );
+    rows = res.data || [];
+  } catch(e) { return; }
+  for (const row of rows) {
+    try {
+      await raceTimeout(
+        supabase.functions.invoke("send-inspection-email", { body: row.payload }),
+        25000
+      );
+      // Delete only after confirmed send
+      supabase.from("pending_emails").delete().eq("id", row.id).then(()=>{}).catch(()=>{});
+    } catch(e) {
+      console.log("Pending email send failed, will retry later:", e.message);
+    }
+  }
+};
+
 // ═══════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════
@@ -1798,26 +1822,37 @@ function InspectionFormView({ profile, pricing, existingId, onSaved, onBack }) {
     setSubmitting(false);
     setDraftMsg("");
     onSaved?.();
+    // Build pending email rows — queued in DB so they survive connection drops
     const inspectionEmails = pricing?.inspection_emails || [];
     const supplyEmails     = pricing?.supply_emails     || [];
+    const pendingRows = [];
     for (const em of inspectionEmails) {
-      if (emailPdfBase64) {
-        raceTimeout(supabase.functions.invoke("send-inspection-email", {
-          body: { recipient_email:em, pdf_filename:pdfFilename, house_num:info.house, room_num:info.room, tenant_name:info.tenant, inspector_name:info.inspector, date:info.date, grand_total:grandTotal, pdf_base64:emailPdfBase64, is_resubmit:isResubmit },
-        }), 20000).catch(e=>console.error("Inspection email error:", e.message));
-      }
+      if (emailPdfBase64) pendingRows.push({
+        org_id: profile.org_id, inspection_id: savedIdRef.current,
+        payload: { recipient_email:em, pdf_filename:pdfFilename, house_num:info.house, room_num:info.room, tenant_name:info.tenant, inspector_name:info.inspector, date:info.date, grand_total:grandTotal, pdf_base64:emailPdfBase64, is_resubmit:isResubmit },
+      });
     }
     for (const em of supplyEmails) {
-      if (supResult?.base64) {
-        raceTimeout(supabase.functions.invoke("send-inspection-email", {
-          body: { recipient_email:em, pdf_filename:supFilename, house_num:info.house, room_num:info.room, tenant_name:info.tenant, inspector_name:info.inspector, date:info.date, grand_total:grandTotal, pdf_base64:supResult.base64, supplies_mode:true, is_resubmit:isResubmit },
-        }), 20000).catch(e=>console.error("Supplies email error:", e.message));
-      }
+      if (supResult?.base64) pendingRows.push({
+        org_id: profile.org_id, inspection_id: savedIdRef.current,
+        payload: { recipient_email:em, pdf_filename:supFilename, house_num:info.house, room_num:info.room, tenant_name:info.tenant, inspector_name:info.inspector, date:info.date, grand_total:grandTotal, pdf_base64:supResult.base64, supplies_mode:true, is_resubmit:isResubmit },
+      });
     }
-    if (extraEmail && emailPdfBase64) {
-      raceTimeout(supabase.functions.invoke("send-inspection-email", {
-        body: { recipient_email:extraEmail, pdf_filename:pdfFilename, house_num:info.house, room_num:info.room, tenant_name:info.tenant, inspector_name:info.inspector, date:info.date, grand_total:grandTotal, pdf_base64:emailPdfBase64, is_resubmit:isResubmit },
-      }), 20000).catch(e=>console.error("Extra email error:", e.message));
+    if (extraEmail && emailPdfBase64) pendingRows.push({
+      org_id: profile.org_id, inspection_id: savedIdRef.current,
+      payload: { recipient_email:extraEmail, pdf_filename:pdfFilename, house_num:info.house, room_num:info.room, tenant_name:info.tenant, inspector_name:info.inspector, date:info.date, grand_total:grandTotal, pdf_base64:emailPdfBase64, is_resubmit:isResubmit },
+    });
+    if (pendingRows.length) {
+      try {
+        await raceTimeout(supabase.from("pending_emails").insert(pendingRows));
+        processPendingEmails(profile.org_id).catch(()=>{});
+      } catch(e) {
+        // DB unavailable — fall back to direct send (best effort)
+        for (const row of pendingRows) {
+          raceTimeout(supabase.functions.invoke("send-inspection-email", { body:row.payload }), 20000)
+            .catch(fe=>console.error("Fallback email error:", fe.message));
+        }
+      }
     }
   };
 
@@ -2327,6 +2362,14 @@ export default function App() {
     return ()=>subscription.unsubscribe();
   },[]);
 
+  // Retry any queued emails whenever the device regains network access
+  useEffect(()=>{
+    if (!profile?.org_id) return;
+    const handleOnline = ()=>processPendingEmails(profile.org_id).catch(()=>{});
+    window.addEventListener("online", handleOnline);
+    return ()=>window.removeEventListener("online", handleOnline);
+  },[profile]);
+
   // Silently refresh the token when the system wakes or the window is restored.
   // Only redirect to login if the session is actually gone — never reset the view.
   useEffect(()=>{
@@ -2397,6 +2440,7 @@ export default function App() {
 
     isLoggedInRef.current = true;
     setView(prof.role==="admin"?"dashboard":"inspections");
+    processPendingEmails(prof.org_id).catch(()=>{});
   };
 
   const logout = async () => {
